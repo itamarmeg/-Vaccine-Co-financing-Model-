@@ -329,7 +329,7 @@ data <- data %>%
   # Filter years do not have any GAVI data or only for
   #   few countries and based on future projections
   #   First add a year for BCG, so plot despite no GAVI
-  #   funding. Use year of paper.
+  #   funding.
   mutate(year_gavi = ifelse(is.na(year_gavi) & 
                               authors == "Levin et al. 2007" &
                               vaccine == "BCG",
@@ -352,17 +352,14 @@ data <- data %>%
   # Use the analysis with the 90% intervention coverage and year 2018
   #   for GAVI funding based on paper intervention years
   filter(!(authors == "Megiddo et al. 2018" & 
-             (grepl("similar to DPT", assumptions)))) %>%# |
+             (grepl("Expanded coverage (90%)", assumptions)))) %>%# |
   #              year_gavi != 2018))) %>% 
   # Use most recent year of GAVI funding for Ojal et al. 2019 
   #   based on paper intervention years
   #filter(!(authors == "Ojal et al. 2019" & year_gavi < 2016)) %>%
   # Do not include the CEA with GAVI subsidy accounted for
   filter(!(authors == "Debellut et al., 2019" &
-             (assumptions == "Vaccine programme costs with Gavi subsidy"))) %>%# |
-                # (year_gavi < 2017 & country == "Ghana") |
-                # (year_gavi < 2018 & country == "India") |
-                # (year_gavi < 2015 & country == "Angola")))) %>%
+             (assumptions == "Vaccine programme costs with Gavi subsidy"))) %>%
   # Remove rows with no co-financing data
   filter(!(is.na(total) & (!is.na(gavi) | !is.na(domestic)))) %>%
   # Add a column with vaccine and paper
@@ -567,7 +564,7 @@ p2 <- ggplot() +
         axis.title = element_text(),
         axis.text.x = element_text(angle = 45),
         plot.caption = element_text(hjust = 0))
-p2
+
 # Save figure
 ggsave("figures/all_country_compare_1GDP.png", p2, dpi = 300, 
        width = 8*2.5, height = 10*2.5, units = "cm")
@@ -633,7 +630,7 @@ p3 <- ggplot() +
         axis.title = element_text(),
         axis.text.x = element_text(angle = 45),
         plot.caption = element_text(hjust = 0))
-p3
+
 # Save figure
 ggsave("figures/all_country_compare_05GDP.png", p2, dpi = 300, 
        width = 8*2.5, height = 10*2.5, units = "cm")
@@ -677,13 +674,14 @@ p4 <- ggplot() +
              mapping = aes(x = cost/1000000, y = benefit/1000, 
                            color = vaccine_cea_paper,
                            shape = vaccine_cea_paper), 
-             size = 2.5) +
+             size = 4.5) +
   # Arrow based on proportion of GAVI support relative to deomestic
   geom_segment(data = data_ghana %>% 
                  filter(year %in% 2012:2016),
                aes(x = cost/1000000, xend = (cost - gavi)/1000000,#(cost * domestic_p)/1000000, 
                    y = benefit/1000, yend = benefit/1000),
-               arrow = arrow(length = unit(0.1, "cm"))) +
+               arrow = arrow(length = unit(0.2, "cm")),
+               size = 1) +
   # x-axis name and $ formatting
   scale_x_continuous(name = "Cost (in millions USD 2018)", 
                      labels = scales::dollar) +
@@ -704,11 +702,12 @@ p4 <- ggplot() +
   theme_fivethirtyeight() +
   theme(legend.position = "bottom",
         axis.title = element_text(),
-        plot.caption = element_text(hjust = 0))
-p4
+        plot.caption = element_text(hjust = 0),
+        text = element_text(size = 16))
+
 # Save figure
 ggsave("figures/ghana_x1gdp.png", p4, dpi = 300, 
-       width = 8*2.5, height = 10*2.5, units = "cm")
+       width = 8.5*2.5, height = 10*2.5, units = "cm")
 
 # Create and save figure with appendix caption
 p4 +
@@ -716,14 +715,14 @@ p4 +
   labs(caption = paste(
     "Figure 1. GAVI contribution to vaccines in Ghana.",
     "The dashed black line is the 0.5 x GDP-based cost-effectiveness threshold;",
-    "Each plot represents a differe year of GAVI financing;",
+    "Each plot represents a different year of GAVI co-financing;",
     "Points represents costs and benefits extracted from cost-effectiveness (CE) studies;",
     "Arrows represent financing by GAVI (CE studies typically include costs not covered by GAVI",
     "such as distribution costs).",
     #"Arrows represent the proportion of costs funded by GAVI (CE studies and total funding do not match).",
     sep = "\n"))
 
-ggsave("figures/A3_all_ghana_x1gdp_appendix_caption.png", dpi = 300, 
+ggsave("figures/A3_ghana_x1gdp_appendix_caption.png", dpi = 300, 
        width = 8*2.5, height = 10*2.5, units = "cm")
 ```
 
@@ -735,7 +734,7 @@ legend_lables <- data_all_countries %>%
   unlist %>% sort
 
 # Plot all countries using 1 X GDP per capita threshold
-p2 <- ggplot() +
+p5 <- ggplot() +
   # Facet by country and year
   facet_grid(year~country, scales = "free") +
   # Threshold line
@@ -770,7 +769,6 @@ p2 <- ggplot() +
   scale_color_manual(name = "",
                      labels = legend_lables,
                      values = gdocs_pal()(10)) +
-
   scale_shape_manual(name = "",
                      labels = legend_lables,
                      values = c(15, 16, 18,  13, 13, 13, 17, 17, 17, 7)) +
@@ -780,13 +778,14 @@ p2 <- ggplot() +
   theme(legend.position = "bottom",
         axis.title = element_text(),
         axis.text.x = element_text(angle = 45),
-        plot.caption = element_text(hjust = 0))
-p2
+        plot.caption = element_text(hjust = 0),
+        text = element_text(size = 16))
+
 # Save figure
-ggsave("figures/country_compare_1GDP.png", p2, dpi = 300, 
+ggsave("figures/country_compare_1GDP.png", p5, dpi = 300, 
        width = 8*2.5, height = 10*2.5, units = "cm")
 
-p2 + labs(
+p5 + labs(
   caption = paste(
     "Figure A2. GAVI contribution to vaccines in Ghana, Angola, India, Kenya, and Senegal.",
     "The dashed black line is the 1 x GDP cost-effectiveness threshold;",
@@ -797,6 +796,121 @@ p2 + labs(
     sep = "\n"))
 
 # Create and save figure with appendix caption
-ggsave("figures/A4_country_compare_1GDP.png", dpi = 300, 
+ggsave("figures/A5_country_compare_1GDP.png", dpi = 300, 
        width = 8*2.5, height = 10*2.5, units = "cm")
 ```
+
+## GAVI co-financing Ghana
+
+```{r Gavi co-financing data figures, fig.width=8, fig.height=10}
+financing_ghana_plot_data <- 
+  fund_data %>% 
+  filter(country == "Ghana" & !is.na(gavi)) %>%
+  select(vaccine, year, domestic, gavi) %>%
+  gather(key = source, value = amount, domestic:gavi) %>%
+  mutate(source = gsub("gavi", "Gavi", source)) %>%
+  mutate(source = gsub("domestic", "Domestic", source))
+
+p6 <- ggplot(data = financing_ghana_plot_data,
+       mapping = aes(x = factor(year), y = amount/1000000, fill = source)) +
+  facet_wrap(vaccine~.) +
+  geom_bar(stat = "identity", position = "dodge") +
+  # x-axis name and $ formatting
+  scale_x_discrete(name = "Year") +
+  # y-axis name and formatting
+  scale_y_continuous(name ="Funding in 2018 US Dollars", 
+                     labels = scales::dollar_format(prefix = "$", suffix = "M")) +
+  # Remove fill legend title
+  # Display color legend in four rows and remove shape legend
+  # Set colors and shapes
+  scale_fill_discrete(name = "Source") +
+  # Change theme of plot
+  theme_fivethirtyeight() +
+  theme(legend.position = "bottom",
+        axis.title = element_text(),
+        plot.caption = element_text(hjust = 0),
+        axis.text.x = element_text(angle = 45))
+
+# Save figure
+ggsave("figures/ghana_gavi_cofinancing.png", p6, dpi = 300, 
+       width = 6*2.5, height = 6*2.5, units = "cm")
+
+p6 + labs(
+  caption = paste(
+    "Figure 1. Gavi co-financing of vaccines in Ghana.",
+    "Source of data: Gavi Alliance Annual Progress Reports.",
+    "DTP-hep B: dephtheria, tetanus, pertusis, and hepatitus B vaccine.",
+    "MenA: Meningococcal vaccine.",
+    "PCV: Pneumocaloccal conjugage vaccine.",
+    sep = "\n"))
+
+# Create and save figure with appendix caption
+ggsave("figures/A6_ghana_gavi_cofinancing.png.png", dpi = 300, 
+       width = 9*2.5, height = 6*2.5, units = "cm")
+```
+
+# Tables
+
+## Ghana GAVI co-financing table
+```{r gavi co-financing table}
+table_out <- fund_data %>% 
+  filter(country == "Ghana") %>%
+  filter(!is.na(gavi)) %>%
+  mutate(domestic = paste(scales::dollar(signif(domestic, 3)), 
+                          " (", scales::percent(domestic_p, accuracy = 1), ")",
+                          sep = ""),
+         gavi = paste(scales::dollar(signif(gavi, 3)), 
+                          " (", scales::percent(gavi_p, accuracy = 1), ")",
+                          sep = ""),
+         total = scales::dollar(signif(total, 3))) %>%
+  arrange(vaccine, year) %>%
+  select(Vaccine = vaccine, Year = year, 
+         `Domestic support (%)` = domestic, 
+         `Gavi support (%)` = gavi, Total = total)
+write_csv(table_out, "tables/csv_format/ghana_gavi_cofinancing.csv")
+```
+
+## GAVI CEA table
+```{r gavi cea table}
+table_out <- 
+  cea_data  %>%
+  filter(grepl("DALY|YLL", indicator)) %>%
+  # Only include base-case of Abbot et al. 2012
+  #  and use earleist year of GAVI funding (since intervention is 2003-08).
+  filter(!(authors == "Abbott et al. 2012" & 
+             (assumptions != "$5 per dose"))) %>%# | year_gavi != 2012))) %>% 
+  # Do not include the CEA with GAVI Subsidy accounted for
+  #   and focus on health system perspective.
+  filter(!(authors == "Nonvignon et al. 2018" & 
+             (grepl("Ghana only", assumptions) |
+             !grepl("Health system", perspective)))) %>% 
+  # Use relevant GAVI data year for Krishnamoorthy et al. 2019
+  #   based on paper intervention years
+  # filter(!(authors == "Krishnamoorthy et al. 2019" & 
+  #            year_gavi != 2018)) %>% 
+  # Use the analysis with the 90% intervention coverage and year 2018
+  #   for GAVI funding based on paper intervention years
+  filter(!(authors == "Megiddo et al. 2018" & 
+             (grepl("Expanded coverage (90%)", assumptions)))) %>%# |
+  #              year_gavi != 2018))) %>% 
+  # Use most recent year of GAVI funding for Ojal et al. 2019 
+  #   based on paper intervention years
+  #filter(!(authors == "Ojal et al. 2019" & year_gavi < 2016)) %>%
+  # Do not include the CEA with GAVI subsidy accounted for
+  filter(!(authors == "Debellut et al., 2019" &
+             (assumptions == "Vaccine programme costs with Gavi subsidy"))) %>%
+  # Remove comma from authors column
+  mutate(authors = gsub(",", "", authors)) %>%
+  # Convert to dollars
+  mutate(cost = scales::dollar(signif(cost, 3)),
+         benefit = scales::comma(signif(benefit, 3)),
+         cea = scales::dollar(signif(cea, 3)),
+         year = as.numeric(gsub(".*\\. ", "", authors))) %>%
+  arrange(country, vaccine, year) %>%
+  select(Country = country, Vaccine = vaccine, Indicator = indicator, 
+         Costs = cost, Benefits = benefit, CER = cea, Perspective = perspective,
+         Source = authors)
+write_csv(table_out, "tables/csv_format/cea_table.csv")
+```
+
+
