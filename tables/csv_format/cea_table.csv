@@ -1,0 +1,17 @@
+Country,Vaccine,Indicator,Costs,Benefits,CER,Perspective,Source
+Angola,Rotavirus,DALYs averted,"$7,430,000","105,000",$71,Government,Debellut et al. 2019
+Ghana,BCG,DALYs averted,"$24,700,000",160,"$154,000",Societal,Levin et al. 2007
+Ghana,DTP-hep B,DALYs averted,"$96,000,000","36,000","$2,670",Societal,Levin et al. 2007
+Ghana,Measles,DALYs averted,"$46,200,000","13,600","$3,400",Societal,Levin et al. 2007
+Ghana,Rotavirus,DALYs averted,"$2,110,000","18,600",$113,Healthcare provider,Abbott et al. 2012
+Ghana,Rotavirus,DALYs averted,"$4,930,000","12,800",$387,Health system,Nonvignon et al. 2018
+Ghana,Rotavirus,DALYs averted,"$7,180,000","33,400",$215,Government,Debellut et al. 2019
+Ghana,Yellow Fever,DALYs averted,"$4,720,000","26,900",$176,Societal,Levin et al. 2007
+India,PCV,YLLs averted,"$244,000,000","1,670,000",$147,Health system,Megiddo et al. 2018
+India,PCV,YLLs averted,"$334,000,000","2,580,000",$129,Health system,Megiddo et al. 2018
+India,PCV,DALYs averted,"$475,000,000","2,800,000",$170,Government,Krishnamoorthy et al. 2019
+India,Rotavirus,DALYs averted,"$184,000,000","300,000",$615,Government,Debellut et al. 2019
+Kenya,PCV,DALYs averted,"$21,400,000","52,500",$407,Societal,Ojal et al. 2019
+Kenya,Rotavirus,DALYs averted,"$13,700,000","41,600",$329,Government,Debellut et al. 2019
+Nigeria,Rotavirus,DALYs averted,"$28,900,000","295,000",$98,Government,Debellut et al. 2019
+Senegal,Rotavirus,DALYs averted,"$4,120,000","27,500",$150,Government,Debellut et al. 2019
