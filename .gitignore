@@ -41,3 +41,6 @@ vignettes/*.pdf
 # Data archive
 data/Archive*
 figures/Archive*
+
+# Figures
+*.png

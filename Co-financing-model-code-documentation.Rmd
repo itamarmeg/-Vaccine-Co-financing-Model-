@@ -9,7 +9,7 @@ output:
 
 \pagebreak
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, fig.show = "hide")
 ```
 
 # Setup
@@ -244,11 +244,6 @@ gdp_data <- gdp_data %>%
   
 # Add cost and benefit columns to gdp_data to
 #   draw the CEA threshold
-Ochalek_threshold <- tibble(
-  country = c("Ghana", "Kenya", "Senegal",
-              "Nigeria", "India"),
-  threshold_multiple = c(0.330, 0.415, 0.365, 0.095, 0.200)
-)
 gdp_data <- gdp_data %>%
   # Create rows for each analysis
   slice(rep(row_number(), length(seq_x))) %>% 
@@ -258,15 +253,11 @@ gdp_data <- gdp_data %>%
   mutate(benefit_line = cost/gdp_pc,
          benefit_half_line = cost/gdp_pc/0.5,
          benefit_3_line = cost/gdp_pc/3,
-         benefit_4_5_line = cost/gdp_pc/4.5) %>%
-  left_join(Ochalek_threshold, by = "country") %>%
-  mutate(benefit_ochalek_line = cost/gdp_pc/threshold_multiple)
+         benefit_4_5_line = cost/gdp_pc/4.5)
 
 # Convert to long data tibble
 gdp_data <- gdp_data %>% 
-  gather(key = threshold, value = cea_line, 
-         benefit_line:benefit_4_5_line, 
-         benefit_ochalek_line) %>%
+  gather(key = threshold, value = cea_line, benefit_line:benefit_4_5_line) %>%
   # Write clear headings for different thresholds
   mutate(threshold = ifelse(threshold == "benefit_line", 
                             "1 x GDP\nper capita", 
@@ -279,12 +270,7 @@ gdp_data <- gdp_data %>%
                             threshold)) %>%
   mutate(threshold = ifelse(threshold == "benefit_4_5_line", 
                             "4.5 x GDP\nper capita", 
-                            threshold)) %>%
-  mutate(threshold = ifelse(threshold == "benefit_ochalek_line",
-                            paste(round(threshold_multiple, 2), 
-                                  "x GDP\nper capita (Ochalek 2018)"),
-                            threshold)) %>%
-  select(- threshold_multiple)
+                            threshold))
 ```
 
 Convert the CEA data into 2018 US Dollars using WB deflator.
@@ -441,93 +427,83 @@ data <- data %>%
 
 In the following code, we use the CEA study data for costs and benefits. We use the DC model to calculate the split between domestic and donor funding.
 ```{r DCmodel with data}
+# Ochalek et al. 2018 proportion
+ochalek_p <- 0.33
+
+# Ghana data
+ghana_data <- 
+  data %>%
+  filter(country == "Ghana") %>%
+  distinct(vaccine, cost, benefit)
+
+# GDP per capita data
+ghana_gdppc <-
+  gdp_data %>%
+  filter(country == "Ghana") %>%
+  distinct(year, gdp_pc)
+
 # Run DC model
-DCmodel_out_cea <- mapply(function(c, y){
-  # Get cea cost, benefit, vaccine, data for country and year
-  x_data <- data %>% 
-    filter(country == c & year_gavi == y) %>%
-    distinct(vaccine, cost , benefit, authors)
-  # If no data for country this year, skip
-  if (nrow(x_data) == 0) return(tibble())
-  # Get gdp and threshold data
-  x_gdp <- gdp_data %>%
-    filter(country == c & year == y) %>%
-    distinct(gdp_pc)
-  ochalek_p <- Ochalek_threshold %>% filter(country == c) %>%
-    distinct(threshold_multiple) %>% unlist
- # Run model
-  x <- DCmodel(
-    cost = x_data$cost,
-    benefit = x_data$benefit,
-    intervention = x_data$vaccine,
-    gdp_per_capita = rep(x_gdp$gdp_pc, 5),
-    gdp_threshold_multiple = c(ochalek_p, 0.5, 1, 3, 4.5)
-  ) %>% mutate(country = c, year = y)
-  
-  return(x)
-}, 
-# Run for each country
-c = sapply(countries_model[countries_model != "Angola"], 
-           function(c) sapply(2001:2018, function(y) c), 
-           simplify = F) %>% unlist, 
-# Run for each year
-y = sapply(countries_model[countries_model != "Angola"], 
-           function(c) sapply(2001:2018, function(y) y),
-           simplify = F) %>% unlist) %>% 
-  # Bind rows of list output
-  bind_rows()
+DCmodel_out <- DCmodel(
+cost = ghana_data$cost,
+benefit = ghana_data$benefit,
+intervention = ghana_data$vaccine,
+gdp_per_capita = rep(ghana_gdppc$gdp_pc, 5),
+gdp_threshold_multiple = c(rep(ochalek_p, nrow(ghana_gdppc)),
+                           rep(0.5, nrow(ghana_gdppc)),
+                           rep(1, nrow(ghana_gdppc)),
+                           rep(3, nrow(ghana_gdppc)),
+                           rep(4.5, nrow(ghana_gdppc)))
+)
+    
     
 # Print output
-DCmodel_out_cea %>%
-  transmute(country, intervention, year, cer,
-            thres_mult = gdp_threshold_multiple, 
-            thres = round(threshold, 2),
-            domestic, donor) %>%
-  print(n = nrow(DCmodel_out_cea))
+DCmodel_out %>% 
+  left_join(ghana_gdppc %>% rename(gdp_per_capita = gdp_pc), 
+            by = "gdp_per_capita") %>%
+    # Remove rotavirus vaccines before 2012
+    filter(!(intervention == "Rotavirus" & year < 2012)) %>%
+  select(intervention, year, cer, 
+         gdp_threshold_multiple, threshold, domestic, donor) %>%
+  print(n = nrow(DCmodel_out))
 ```
 
 In the following code, we use the CEA study benefits but use data from Gavi reports on costs (this does not include many of the costs that are in the CEA studies). We use the DC model to calculate the split between domestic and donor funding.
 ```{r DCmodel with data costs from gavi}
+# Ghana data
+ghana_data <- 
+  data %>%
+  filter(country == "Ghana") %>%
+  distinct(vaccine, cost = total, benefit)
+
+# GDP per capita data
+ghana_gdppc <-
+  gdp_data %>%
+  filter(country == "Ghana") %>%
+  distinct(year, gdp_pc)
+
 # Run DC model
-DCmodel_out_reports <- mapply(function(c, y){
-  # Get Gavi financed cost, and cea benefit, data for country and year
-  x_data <- data %>% 
-    filter(country == c & year_gavi == y) %>%
-    distinct(vaccine , cost = total, benefit)
-  # If no data for country this year, skip
-  if (nrow(x_data) == 0) return(tibble())
-  # Get gdp and threshold data
-  x_gdp <- gdp_data %>%
-    filter(country == c & year == y) %>%
-    distinct(gdp_pc)
-  ochalek_p <- Ochalek_threshold %>% filter(country == c) %>%
-    distinct(threshold_multiple) %>% unlist
- # Run model
-  x <- DCmodel(
-    cost = x_data$cost,
-    benefit = x_data$benefit,
-    intervention = x_data$vaccine,
-    gdp_per_capita = rep(x_gdp$gdp_pc, 5),
-    gdp_threshold_multiple = c(ochalek_p, 0.5, 1, 3, 4.5)
-  ) %>% mutate(country = c, year = y)
-  
-  return(x)
-}, 
-# Run for each country
-c = sapply(countries_model[countries_model != "Angola"], 
-           function(c) sapply(2001:2018, function(y) c), 
-           simplify = F) %>% unlist, 
-# Run for each year
-y = sapply(countries_model[countries_model != "Angola"], 
-           function(c) sapply(2001:2018, function(y) y),
-           simplify = F) %>% unlist) %>% 
-  # Bind rows of list output
-  bind_rows()
+DCmodel_out <- DCmodel(
+cost = ghana_data$cost,
+benefit = ghana_data$benefit,
+intervention = ghana_data$vaccine,
+gdp_per_capita = rep(ghana_gdppc$gdp_pc, 5),
+gdp_threshold_multiple = c(rep(ochalek_p, nrow(ghana_gdppc)),
+                           rep(0.5, nrow(ghana_gdppc)),
+                           rep(1, nrow(ghana_gdppc)),
+                           rep(3, nrow(ghana_gdppc)),
+                           rep(4.5, nrow(ghana_gdppc)))
+)
 
 # Donor financing is 0 in all rows since the total amount
-#   is missing many costs included in CEAs. 
-DCmodel_out_reports %>%
-  select(country, intervention, year, cer,
+#   is missing many costs included in CEAs. We only pring
+#   out rows in which donor co-financing is higher than 0
+#   here.
+DCmodel_out %>%
+  left_join(ghana_gdppc %>% rename(gdp_per_capita = gdp_pc),
+            by = "gdp_per_capita") %>%
+  # Remove rotavirus vaccins befow 2012
+    filter(!(intervention == "Rotavirus" & year < 2012)) %>%
+  select(intervention, year, cer,
          gdp_threshold_multiple, threshold, domestic, donor) %>%
   filter(donor > 0)
 ```
@@ -535,8 +511,6 @@ DCmodel_out_reports %>%
 
 \pagebreak
 # Figures
-
-The figures in this document are optimised for a manuscript and project report. They may not appear optimally in this document.
 
 ## All Ghana figure
 ```{r Ghana figure, fig.width=8, fig.height=10}
@@ -621,7 +595,7 @@ p1 <- ggplot() +
 
 # Save figure
 ggsave("figures/ghana_all.png", p1, dpi = 300, 
-       width = 9.1*2.5, height = 10*2.5, units = "cm")
+       width = 8*2.5, height = 10*2.5, units = "cm")
 
 # Create and save figure with appendix caption
 p1 +
@@ -636,7 +610,7 @@ p1 +
     sep = "\n"))
 
 ggsave("figures/A1_ghana_all_appendix_caption.png", dpi = 300, 
-       width = 9.1*2.5, height = 10*2.5, units = "cm")
+       width = 8*2.5, height = 10*2.5, units = "cm")
 ```
 
 ## All cross country figure 1 x GDP
@@ -750,29 +724,28 @@ ggsave("figures/A2_all_country_compare_1GDP.png", dpi = 300,
        width = 8*2.5, height = 10*2.5, units = "cm")
 ```
 
-## All cross country figure Ochalek (2018) x GDP
-```{R cross country figure Ochalek gdp, fig.width=8, fig.height=10}
-# Plot all countries using Ochalek 2018 X GDP per capita threshold
+## All cross country figure 0.5 x GDP
+```{R cross country figure 0.5 gdp, fig.width=8, fig.height=10}
+# Plot all countries using 0.5 X GDP per capita threshold
 p3 <- ggplot() +
   # Facet by country and year
   facet_grid(year~country, scales = "free") +
   # Threshold line
   geom_line(data = gdp_data_all_countries %>% 
-              filter(grepl("Ochalek", threshold)) %>%
+              filter(threshold == "0.5 x GDP\nper capita") %>%
               filter(cost < max_all_countries_x),
             mapping = aes(x = cost/1000, y = cea_line), linetype = 2) +
-  # Costs and effectiveness point
+  # CCosts and effectiveness point
   geom_point(data = data_all_countries,
              mapping = aes(x = cost/1000, y = benefit, 
                            color = vaccine_cea_paper,
                            shape = vaccine_cea_paper),
-             size = 3.5) +
+             size = 2.5) +
   # Arrow based on the proportion of Gavi support relative to domestic
   geom_segment(data = data_all_countries,
                aes(x = cost/1000, xend = (cost - gavi)/1000,
                    y = benefit, yend = benefit),
-               arrow = arrow(length = unit(0.2, "cm")),
-               size = 1) +
+               arrow = arrow(length = unit(0.1, "cm"))) +
   # x-axis name and $ formatting
   scale_x_continuous(name = "Cost per 100,000 people (in thousands USD 2018)", 
                      labels = scales::dollar) +
@@ -782,7 +755,7 @@ p3 <- ggplot() +
   # Remove color/shape legend name
   # Display color legend in four rows and remove shape legend
   # Set colors and shapes
-  guides(color = guide_legend(nrow = 3, byrow = TRUE)) +
+  guides(color = guide_legend(nrow = 2, byrow = TRUE)) +
   scale_color_manual(name = "",
                      labels = legend_lables,
                      values = gdocs_pal()(10)) +
@@ -796,14 +769,13 @@ p3 <- ggplot() +
   theme(legend.position = "bottom",
         axis.title = element_text(),
         axis.text.x = element_text(angle = 45),
-        plot.caption = element_text(hjust = 0),
-        text = element_text(size = 14))
+        plot.caption = element_text(hjust = 0))
 
 # Save figure
-ggsave("figures/all_country_compare_OchalekGDP.png", p3, dpi = 300, 
-       width = 12*2, height = 10*2, units = "cm")
+ggsave("figures/all_country_compare_05GDP.png", p2, dpi = 300, 
+       width = 8*2.5, height = 10*2.5, units = "cm")
 
-p3 + labs(
+p2 + labs(
   caption = paste(
     "Figure A2. Gavi contribution to vaccines in Ghana, Angola, India, Kenya, and Senegal.",
     "The dashed black line is the 0.5 x GDP cost-effectiveness threshold;",
@@ -813,8 +785,8 @@ p3 + labs(
     sep = "\n"))
 
 # Create and save figure with appendix caption
-ggsave("figures/A2_all_country_compare_OchalekGDP.png", dpi = 300, 
-       width = 9*2.5, height = 10*2.5, units = "cm")
+ggsave("figures/A2_all_country_compare_05GDP.png", dpi = 300, 
+       width = 8*2.5, height = 10*2.5, units = "cm")
 ```
 
 ## Ghana 1 x GDP 2012-2016 (most data for these years)
@@ -892,83 +864,8 @@ ggsave("figures/A3_ghana_x1gdp_appendix_caption.png", dpi = 300,
        width = 8*2.5, height = 10*2.5, units = "cm")
 ```
 
-## Ghana Ochalek (2018) x GDP 2012-2016 (most data for these years)
-```{r Ghana Ochalek x GDP figure, fig.width=8, fig.height=10}
-# Plot legend lables
-legend_lables <- data_ghana %>%
-  distinct(vaccine_cea_paper) %>%
-  unlist %>% sort
-
-# Plot Ghana
-p4 <- ggplot() +
-  # Facet by year and threshold
-  facet_wrap(year~., scales = "free", ncol = 2) +
-  # Threshold line
-  geom_line(data = gdp_data_ghana %>% 
-              filter(country == "Ghana") %>%
-              filter(cost < max_ghana_x) %>%
-              filter(grepl("Ochalek", threshold)) %>%
-              filter(year %in% 2012:2016),
-            mapping = aes(x = cost/1000000, y = cea_line/1000), linetype = 2) +
-  # Costs and effectiveness point
-  geom_point(data = data_ghana %>% 
-               filter(year %in% 2012:2016),
-             mapping = aes(x = cost/1000000, y = benefit/1000, 
-                           color = vaccine_cea_paper,
-                           shape = vaccine_cea_paper), 
-             size = 4.5) +
-  # Arrow based on the proportion of Gavi support relative to domestic
-  geom_segment(data = data_ghana %>% 
-                 filter(year %in% 2012:2016),
-               aes(x = cost/1000000, xend = (cost - gavi)/1000000,
-                   y = benefit/1000, yend = benefit/1000),
-               arrow = arrow(length = unit(0.2, "cm")),
-               size = 1) +
-  # x-axis name and $ formatting
-  scale_x_continuous(name = "Cost (in millions USD 2018)", 
-                     labels = scales::dollar) +
-  # y-axis name and formatting
-  scale_y_continuous(name ="DALYs averted (in thousdands)", 
-                     labels = scales::comma) +
-  # Remove color/shape legend name
-  # Display color legend in two rows and remove shape legend
-  # Set colors and shapes
-  guides(color = guide_legend(nrow = 2, byrow = TRUE)) +
-  scale_color_manual(name = "", 
-                     labels = legend_lables,
-                     values = gdocs_pal()(7)) +
-  scale_shape_manual(name = "",
-                     labels = legend_lables,
-                     values = c(15, 16, 18, 17, 17, 17, 7)) +
-  # Change theme of plot
-  theme_fivethirtyeight() +
-  theme(legend.position = "bottom",
-        axis.title = element_text(),
-        plot.caption = element_text(hjust = 0),
-        text = element_text(size = 16))
-
-# Save figure
-ggsave("figures/ghana_ochalekgdp.png", p4, dpi = 300, 
-       width = 8.5*2.5, height = 10*2.5, units = "cm")
-
-# Create and save figure with appendix caption
-p4 +
-  # Add a caption
-  labs(caption = paste(
-    "Figure 1. Gavi contribution to vaccines in Ghana.",
-    "The dashed black line is the 0.33 x GDP-based cost-effectiveness threshold (based on Ochalek et al. 2018);",
-    "Each plot represents a different year of Gavi co-financing;",
-    "Points represents costs and benefits extracted from cost-effectiveness (CE) studies;",
-    "Arrows represent financing by Gavi (CE studies typically include costs not covered by Gavi",
-    "such as distribution costs).",
-    sep = "\n"))
-
-ggsave("figures/A3_ghana_ochalekgdp_appendix_caption.png", dpi = 300, 
-       width = 8*2.5, height = 10*2.5, units = "cm")
-```
-
 ## Country comparison 1 x GDP per capita
-```{R cross country figure some 1 x gdp, fig.width=12, fig.height=10}
+```{R cross country figure some 1 x gdp, fig.width=8, fig.height=10}
 # Plot legend lables
 legend_lables <- data_all_countries %>%
   distinct(vaccine_cea_paper) %>%
@@ -1118,12 +1015,11 @@ p7 <- ggplot(data = financing_plot_data,
   theme(legend.position = "bottom",
         axis.title = element_text(),
         plot.caption = element_text(hjust = 0),
-        axis.text.x = element_text(angle = 45),
-        text = element_text(size = 16))
+        axis.text.x = element_text(angle = 45))
 
 # Save figure
 ggsave("figures/all_gavi_cofinancing.png", p7, dpi = 300, 
-       width = 12*2.5, height = 12*2.5, units = "cm")
+       width = 10*2.5, height = 10*2.5, units = "cm")
 
 p6 + labs(
   caption = paste(
@@ -1137,172 +1033,6 @@ p6 + labs(
 # Create and save figure with appendix caption
 ggsave("figures/A7_all_gavi_cofinancing.png", dpi = 300, 
        width = 8*2.5, height = 10*2.5, units = "cm")
-```
-
-## Barplot DC model cost from CEA vs costs total from Gavi reports
-```{r barplot DC model, fig.width=8, fig.height=10}
-DC_combined <- rbind(
-  DCmodel_out_cea %>% mutate(cost_from = "CEA study"),
-  DCmodel_out_reports %>% mutate(cost_from = "Gavi reports")
-) %>%
-  gather(key = source, value = value, domestic:donor) %>%
-  mutate(source = ifelse(source == "domestic", "Country", "Donor")) %>%
-  mutate(cost_from = paste("DC model:", cost_from, "costs"))
-
-p <- ggplot(data = DC_combined %>% 
-         filter(country == "Ghana" & gdp_threshold_multiple == 1) %>%
-         left_join(data %>% select(authors, cost, benefit),
-            by = c("cost", "benefit")) %>%
-         mutate(intervention = ifelse(is.na(authors),
-                                      intervention,
-                                      paste(intervention, authors))),
-             mapping = aes(x = factor(year), y = value/1000000, fill = source)) +
-  facet_wrap(cost_from~intervention, scales = "free") +
-  geom_bar(stat = "identity", position = "dodge") +
-  # x-axis name and $ formatting
-  scale_x_discrete(name = "Year") +
-  # y-axis name and formatting
-  scale_y_continuous(name ="Funding in 2018 US Dollars", 
-                     labels = scales::dollar_format(prefix = "$", suffix = "M")) +
-  # Change fill legend title
-  scale_fill_discrete(name = "Source") +
-  # Change theme of plot
-  theme_fivethirtyeight() +
-  theme(legend.position = "bottom",
-        plot.caption = element_text(hjust = 0),
-        axis.text.x = element_text(angle = 45),
-        text = element_text(size = 18))
-
-# Save figure
-ggsave("figures/ghana_DCmodel_1X_comparison.png", p, dpi = 300, 
-       width = 14*2.5, height = 10*2.5, units = "cm")
-
-```
-
-## Barplot DPT DC model cost from CEA vs costs total from Gavi reports
-```{r barplot DC model some, fig.width=8, fig.height=8}
-DC_combined_real_ghana_DTP <- rbind(
-  DC_combined %>%
-    filter(country == "Ghana" & grepl("DTP", intervention) & 
-             gdp_threshold_multiple == 1) %>%
-    mutate(cost_from = ifelse(grepl("CEA", cost_from),
-                              paste("(A)", cost_from),
-                              paste("(B)", cost_from))) %>%
-    select(year, cost_from, source, value),
- fund_data %>%
-   filter(country == "Ghana" & grepl("DTP", vaccine) & year <= 2016) %>%
-   mutate(Country = domestic, Donor = gavi, cost_from = "(C) Gavi reports") %>%
-   select(year, cost_from, Country, Donor) %>%
-   gather(key = source, value = value, Country:Donor)
- )
-
-
-p <- ggplot(data = DC_combined_real_ghana_DTP,
-             mapping = aes(x = factor(year), y = value/1000000, fill = source)) +
-  facet_wrap(cost_from~., scales = "free", nrow = 3) +
-  geom_bar(stat = "identity", position = "dodge") +
-  # x-axis name and $ formatting
-  scale_x_discrete(name = "Year") +
-  # y-axis name and formatting
-  scale_y_continuous(name ="Funding in 2018 US Dollars", 
-                     labels = scales::dollar_format(prefix = "$", suffix = "M")) +
-  # Change fill legend title
-  scale_fill_discrete(name = "Source") +
-  # Change theme of plot
-  theme_fivethirtyeight() +
-  theme(legend.position = "bottom",
-        plot.caption = element_text(hjust = 0),
-        axis.text.x = element_text(angle = 45))
-
-# Save figure
-ggsave("figures/ghana_DCmodel_1x_DTP_comparison.png", p, dpi = 300, 
-       width = 8*2.5, height = 8*2.5, units = "cm")
-
-```
-
-## Scatterplot DPT Gavi financing vs GDP per capita
-```{r scatter DPT Gavi financing vs GDP per capita, fig.width=8, fig.height=8}
-DPT_vs_GDP <- DC_combined_real_ghana_DTP %>%
-  filter(grepl("\\(C", cost_from)) %>%
-  spread(key = source, value = value) %>%
-  mutate(p_donor = Donor/(Country + Donor)) %>%
-  left_join(gdp_data %>%
-              filter(country == "Ghana" & 
-                       grepl("1 x", threshold) &
-                       cost == 0) %>%
-              select(year, gdp_pc),
-            by = "year")
-
-p <- ggplot(data = DPT_vs_GDP,
-             mapping = aes(x = gdp_pc, y = p_donor)) +
-  geom_point(size = 3) +
-  geom_text(data = DPT_vs_GDP %>% 
-              mutate(x_text = ifelse(year %in% c(2014, 2007, 2009, 2011),
-                                     gdp_pc + 40,
-                                     gdp_pc - 38)),
-    mapping = aes(x = x_text, y = p_donor+.015, label = year),
-    size = 5.5) +
-  # x-axis name and $ formatting
-  scale_x_continuous(name = "GDP per capita",
-                   labels = scales::dollar) +
-  # y-axis name and formatting
-  scale_y_continuous(name ="Gavi contribution to funding vaccine", 
-                     labels = scales::percent) +
-  # Change theme of plot
-  theme_fivethirtyeight() +
-  theme(axis.title = element_text(),
-        text = element_text(size = 20))
-
-# Save figure
-ggsave("figures/scatter_GDP_vs_DTP_cofinancing.png", p, dpi = 300, 
-       width = 8*2.5, height = 8*2.5, units = "cm")
-
-```
-
-## Scatterplot DPT Gavi financing vs GDP per capita vs Gavi report total
-```{r Scatterplot DPT Gavi financing vs GDP per capita vs Gavi report total, fig.width=12, fig.height=8}
-DPT_vs_GDP_vs_report <- DPT_vs_GDP %>% mutate(total = Country + Donor) %>%
-  select(-Country, -Donor) %>%
-  gather(key = panel_x, value = value, gdp_pc, total) %>%
-  mutate(panel_x = ifelse(panel_x == "gdp_pc",
-                          "(A) GDP per capita",
-                          "(B) Gavi report total vaccine financing (in millions)"),
-         panel_y = "Gavi contribution to funding vaccine") %>%
-  mutate(value = ifelse(grepl("\\(B", panel_x), value/1000000, value))
-
-p <- ggplot(data = DPT_vs_GDP_vs_report,
-             mapping = aes(x = value, y = p_donor)) +
-  facet_wrap(panel_x~., scales  = "free", strip.position = "bottom") +
-  geom_point(size = 2.5) +
-  geom_text(
-    data = DPT_vs_GDP_vs_report %>%
-      mutate(
-        x_text = ifelse(grepl("\\(A", panel_x),
-                        ifelse(year %in% c(2014, 2007, 2009, 2011),
-                               value + 50,
-                               value - 48),
-                        ifelse(year %in% c(2013, 2009),
-                               value - 1.1,
-                               value + 1.2)
-                        )),
-    mapping = aes(x = x_text, y = p_donor + 0.02, label = year),
-    size = 4) +
-  # x-axis name and $ formatting
-  scale_x_continuous(name = "",
-                   labels = scales::dollar) +
-  # y-axis name and formatting
-  scale_y_continuous(name ="Gavi contribution to funding vaccine", 
-                     labels = scales::percent) +
-  # Change theme of plot
-  theme_fivethirtyeight() +
-  theme(axis.title = element_text(),
-        text = element_text(size = 16),
-        strip.placement = "outside")
-
-# Save figure
-ggsave("figures/scatter_GDP_vs_DTP_vs_reports_cofinancing.png", p, dpi = 300, 
-       width = 18*1.5, height = 8*1.5, units = "cm")
-
 ```
 
 ## Reproduce figure from Morton et al 2018
@@ -1360,12 +1090,11 @@ ggplot() +
   scale_shape_manual(name = "", values = c("circle", "square")) +
   scale_x_continuous(name = "Costs", expand = c(0, 0), limits = c(0,100)) + 
   scale_y_continuous(name = "Country Benefits", expand = c(0, 0), limits = c(0,100)) +
-  theme_fivethirtyeight() +
+  theme_classic() +
   theme(legend.position = "none",
         axis.line = element_line(arrow = arrow(length = unit(0.4, "cm"))),
         axis.text = element_blank(),
         axis.ticks = element_blank(),
-        panel.grid = element_blank(),
         text = element_text(size = 16))
 
 ggsave("figures/donor_funding_reporduce_morton18.png", dpi = 300, 
@@ -1433,3 +1162,5 @@ table_out <-
          Source = authors)
 write_csv(table_out, "tables/csv_format/cea_table.csv")
 ```
+
+
